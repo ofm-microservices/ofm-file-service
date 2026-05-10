@@ -10,6 +10,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 )
 
 type client struct {
@@ -62,6 +63,10 @@ func Open(ctx context.Context, cfg Options) (Storage, error) {
 }
 
 func (c *client) Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error) {
+	started := time.Now()
+	status := "success"
+	defer func() { metrics.Global().ObserveObjectStorage("put", c.bucket, status, time.Since(started)) }()
+
 	_, err := c.s3.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(c.bucket),
 		Key:         aws.String(objectKey),
@@ -69,6 +74,7 @@ func (c *client) Put(ctx context.Context, objectKey, contentType string, data []
 		ContentType: aws.String(contentType),
 	})
 	if err != nil {
+		status = "error"
 		return 0, WrapPutObjectError(objectKey, err)
 	}
 
@@ -76,10 +82,15 @@ func (c *client) Put(ctx context.Context, objectKey, contentType string, data []
 }
 
 func (c *client) Delete(ctx context.Context, objectKey string) error {
+	started := time.Now()
+	status := "success"
+	defer func() { metrics.Global().ObserveObjectStorage("delete", c.bucket, status, time.Since(started)) }()
+
 	if _, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(objectKey),
 	}); err != nil {
+		status = "error"
 		return WrapDeleteObjectError(objectKey, err)
 	}
 

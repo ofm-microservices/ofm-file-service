@@ -86,7 +86,7 @@ var _ = Describe("server lifecycle", func() {
 	It("returns an error when the listener cannot be created", func() {
 		srv := &server{
 			svc: &fileSvcFake{},
-			cfg: config.GRPCConfig{Host: "invalid host", Port: 9094},
+			cfg: config.GRPCConfig{Host: "invalid host", Port: 9504},
 			log: testLogger(),
 			srv: grpc.NewServer(),
 		}
@@ -147,7 +147,7 @@ var _ = Describe("RPC handlers", func() {
 					return nil, domain.ErrInvalidFilename
 				},
 			},
-			log: testLogger(),
+			log:  testLogger(),
 			mapr: newFileMapper(testLogger()),
 		}
 

@@ -58,7 +58,7 @@ var _ = Describe("Load", func() {
 			},
 			GRPC: GRPCConfig{
 				Host: "0.0.0.0",
-				Port: 9094,
+				Port: 9504,
 			},
 			Scylla: ScyllaConfig{
 				Hosts:                  []string{"127.0.0.1"},
@@ -85,7 +85,7 @@ var _ = Describe("Load", func() {
 		Expect(os.Setenv("APP_ENV", "test")).To(Succeed())
 		Expect(os.Setenv("LOG_LEVEL", "debug")).To(Succeed())
 		Expect(os.Setenv("GRPC_HOST", "127.0.0.1")).To(Succeed())
-		Expect(os.Setenv("GRPC_PORT", "9099")).To(Succeed())
+		Expect(os.Setenv("GRPC_PORT", "9504")).To(Succeed())
 		Expect(os.Setenv("SCYLLA_HOSTS", "scylla-1,scylla-2")).To(Succeed())
 		Expect(os.Setenv("SCYLLA_PORT", "19042")).To(Succeed())
 		Expect(os.Setenv("SCYLLA_KEYSPACE", "files_test")).To(Succeed())
@@ -108,7 +108,7 @@ var _ = Describe("Load", func() {
 		Expect(cfg.App.Env).To(Equal("test"))
 		Expect(cfg.App.LogLevel).To(Equal("debug"))
 		Expect(cfg.GRPC.Host).To(Equal("127.0.0.1"))
-		Expect(cfg.GRPC.Port).To(Equal(9099))
+		Expect(cfg.GRPC.Port).To(Equal(9504))
 		Expect(cfg.Scylla.Hosts).To(Equal([]string{"scylla-1", "scylla-2"}))
 		Expect(cfg.Scylla.Port).To(Equal(19042))
 		Expect(cfg.Scylla.Keyspace).To(Equal("files_test"))

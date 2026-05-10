@@ -7,10 +7,11 @@ import (
 
 // Config groups the full file-service runtime configuration.
 type Config struct {
-	App    AppConfig
-	GRPC   GRPCConfig
-	Scylla ScyllaConfig
-	RustFS RustFSConfig
+	App     AppConfig
+	GRPC    GRPCConfig
+	Metrics MetricsConfig
+	Scylla  ScyllaConfig
+	RustFS  RustFSConfig
 }
 
 // Load reads environment variables into Config and applies defaults declared
