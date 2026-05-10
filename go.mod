@@ -11,7 +11,7 @@ require (
 	github.com/gocql/gocql v1.7.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/ofm-microseervices/ofm-common v0.0.0
+	github.com/ofm-microservices/ofm-common v0.0.0
 	github.com/onsi/ginkgo/v2 v2.27.1
 	github.com/onsi/gomega v1.38.2
 	go.uber.org/fx v1.24.0
@@ -56,4 +56,4 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 )
 
-replace github.com/ofm-microseervices/ofm-common => ../ofm-common
+replace github.com/ofm-microservices/ofm-common => ../ofm-common

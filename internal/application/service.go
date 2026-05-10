@@ -8,7 +8,7 @@ import (
 
 	"file-service/internal/domain"
 	"github.com/google/uuid"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 type fileService struct {

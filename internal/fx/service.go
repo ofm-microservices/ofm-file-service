@@ -4,7 +4,7 @@ import (
 	"file-service/config"
 	app "file-service/internal/application"
 	"file-service/internal/domain"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"go.uber.org/fx"
 )
