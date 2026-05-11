@@ -1,9 +1,13 @@
 package scylla
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrNilScyllaDB reports a missing ScyllaDB dependency.
 var ErrNilScyllaDB = fmt.Errorf("scylla db is nil")
+var ErrNilLogger = errors.New("logger is nil")
 
 // WrapCreateFileError annotates file creation failures.
 func WrapCreateFileError(err error) error {

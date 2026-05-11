@@ -60,6 +60,19 @@ var _ = Describe("Load", func() {
 				Host: "0.0.0.0",
 				Port: 9504,
 			},
+			Metrics: MetricsConfig{
+				Enabled: true,
+				Host:    "0.0.0.0",
+				Port:    9604,
+				Path:    "/metrics",
+			},
+			Tracing: TracingConfig{
+				Enabled:        true,
+				Endpoint:       "http://127.0.0.1:9099",
+				Protocol:       "http/protobuf",
+				SampleRatio:    1.0,
+				ServiceVersion: "dev",
+			},
 			Scylla: ScyllaConfig{
 				Hosts:                  []string{"127.0.0.1"},
 				Port:                   9042,

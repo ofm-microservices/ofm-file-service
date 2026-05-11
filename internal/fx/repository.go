@@ -3,6 +3,7 @@ package appfx
 import (
 	"file-service/internal/domain"
 	writerepo "file-service/internal/infra/write/scylla"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/fx"
@@ -15,6 +16,6 @@ var RepoModule = fx.Options(
 )
 
 // ProvideFileRepository constructs the Scylla-backed file repository.
-func ProvideFileRepository(db *gocql.Session) (domain.FileRepository, error) {
-	return writerepo.New(db)
+func ProvideFileRepository(db *gocql.Session, lg logging.Logger) (domain.FileRepository, error) {
+	return writerepo.New(db, lg)
 }

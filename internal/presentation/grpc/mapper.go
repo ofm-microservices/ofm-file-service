@@ -120,7 +120,12 @@ func (m *fileMapper) ToError(err error) error {
 		errors.Is(err, domain.ErrFailedToDeleteStoredFile):
 		return status.Error(codes.Internal, err.Error())
 	default:
-		m.log.Error("file request failed", logging.Err(err))
+		m.log.Error("file request failed",
+			logging.Operation("grpc.file.map_error"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.Err(err),
+		)
 		return status.Error(codes.Internal, "internal server error")
 	}
 }

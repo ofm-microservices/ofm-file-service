@@ -104,11 +104,11 @@ var _ = Describe("providers", func() {
 	})
 
 	It("constructs the repository", func() {
-		repo, err := ProvideFileRepository(&gocql.Session{})
+		repo, err := ProvideFileRepository(&gocql.Session{}, &loggerStub{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(repo).NotTo(BeNil())
 
-		repo, err = ProvideFileRepository(nil)
+		repo, err = ProvideFileRepository(nil, &loggerStub{})
 		Expect(err).To(MatchError(writerepo.ErrNilScyllaDB))
 	})
 
