@@ -29,5 +29,6 @@ type FileRepository interface {
 // FileStorage persists and deletes file objects in RustFS.
 type FileStorage interface {
 	Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error)
+	PresignPut(ctx context.Context, objectKey, contentType string) (string, error)
 	Delete(ctx context.Context, objectKey string) error
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,6 +17,7 @@ import (
 type client struct {
 	bucket string
 	s3     s3API
+	endpoint string
 }
 
 var loadDefaultConfig = awsconfig.LoadDefaultConfig
@@ -43,7 +45,7 @@ func Open(ctx context.Context, cfg Options) (Storage, error) {
 		o.BaseEndpoint = aws.String(cfg.Endpoint)
 	})
 
-	c := &client{bucket: cfg.Bucket, s3: s3Client}
+	c := &client{bucket: cfg.Bucket, s3: s3Client, endpoint: cfg.Endpoint}
 	var lastErr error
 	for i := 0; i < 10; i++ {
 		if _, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(cfg.Bucket)}); err == nil {
@@ -79,6 +81,12 @@ func (c *client) Put(ctx context.Context, objectKey, contentType string, data []
 	}
 
 	return int64(len(data)), nil
+}
+
+func (c *client) PresignPut(ctx context.Context, objectKey, contentType string) (string, error) {
+	_ = ctx
+	_ = contentType
+	return fmt.Sprintf("%s/%s/%s", strings.TrimRight(c.endpoint, "/"), c.bucket, objectKey), nil
 }
 
 func (c *client) Delete(ctx context.Context, objectKey string) error {

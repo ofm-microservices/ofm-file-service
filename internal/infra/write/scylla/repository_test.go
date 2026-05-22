@@ -199,7 +199,7 @@ var _ = Describe("repo operations", func() {
 				},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.GetByID(context.Background(), "file-1")
 		Expect(err).NotTo(HaveOccurred())
@@ -214,7 +214,7 @@ var _ = Describe("repo operations", func() {
 				getStmt: &repoQuery{scanErr: gocql.ErrNotFound},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.GetByID(context.Background(), "missing")
 		Expect(file).To(BeNil())
@@ -247,7 +247,7 @@ var _ = Describe("repo operations", func() {
 				deleteStmt: &repoQuery{},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		Expect(repo.DeleteByID(context.Background(), "file-1")).To(Succeed())
 		Expect(session.queries[deleteStmt].execCalled).To(Equal(1))
@@ -260,7 +260,7 @@ var _ = Describe("repo operations", func() {
 				deleteStmt: &repoQuery{execErr: errors.New("boom")},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		Expect(repo.DeleteByID(context.Background(), "missing")).To(MatchError(ContainSubstring("find file")))
 

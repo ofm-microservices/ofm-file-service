@@ -39,6 +39,7 @@ func (r *repoStub) DeleteByID(context.Context, string) error                  { 
 type storageStub struct{}
 
 func (s *storageStub) Put(context.Context, string, string, []byte) (int64, error) { return 0, nil }
+func (s *storageStub) PresignPut(context.Context, string, string) (string, error)  { return "http://upload.local", nil }
 func (s *storageStub) Delete(context.Context, string) error                       { return nil }
 
 type lifecycleStub struct {

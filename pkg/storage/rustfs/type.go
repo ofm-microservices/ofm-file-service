@@ -26,5 +26,6 @@ type s3API interface {
 // Storage exposes the object operations used by file-service.
 type Storage interface {
 	Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error)
+	PresignPut(ctx context.Context, objectKey, contentType string) (string, error)
 	Delete(ctx context.Context, objectKey string) error
 }
