@@ -22,6 +22,7 @@ type fileSvcFake struct {
 	createFilesFn func(context.Context, domain.UploadFilesParams) ([]*domain.File, error)
 	getFileFn     func(context.Context, string) (*domain.File, error)
 	deleteFileFn  func(context.Context, string) error
+	getURLFn      func(context.Context, string) (string, error)
 	createArgs    []domain.UploadFileParams
 	createMany    []domain.UploadFilesParams
 	getIDs        []string
@@ -58,6 +59,13 @@ func (f *fileSvcFake) DeleteFile(ctx context.Context, fileID string) error {
 		return f.deleteFileFn(ctx, fileID)
 	}
 	return nil
+}
+
+func (f *fileSvcFake) GetFileURL(ctx context.Context, fileID string) (string, error) {
+	if f.getURLFn != nil {
+		return f.getURLFn(ctx, fileID)
+	}
+	return "http://public.local/" + fileID, nil
 }
 
 func testLogger() logging.Logger {

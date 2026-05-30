@@ -63,6 +63,10 @@ func (s *storageFake) PresignPut(ctx context.Context, objectKey, contentType str
 	return "http://upload.local/" + objectKey, nil
 }
 
+func (s *storageFake) PublicURL(objectKey string) string {
+	return "http://public.local/" + objectKey
+}
+
 func (s *storageFake) Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error) {
 	s.putCalls = append(s.putCalls, storageCall{objectKey: objectKey, contentType: contentType, data: append([]byte(nil), data...)})
 	if s.putFn != nil {

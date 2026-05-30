@@ -134,6 +134,26 @@ func (s *server) GetFile(ctx context.Context, req *filev1.GetFileRequest) (*file
 	return &filev1.GetFileResponse{File: s.mapr.ToFileResponse(file)}, nil
 }
 
+// GetFileURL returns the public URL for a file stored in RustFS.
+func (s *server) GetFileURL(ctx context.Context, req *filev1.GetFileURLRequest) (*filev1.GetFileURLResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	url, err := s.svc.GetFileURL(ctx, req.GetFileId())
+	if err != nil {
+		log.Error("get file url failed",
+			logging.Operation("grpc.file.get_url"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+
+	return s.mapr.ToFileURLResponse(req.GetFileId(), url), nil
+}
+
 // DeleteFile deletes the file object and its metadata.
 func (s *server) DeleteFile(ctx context.Context, req *filev1.DeleteFileRequest) (*filev1.DeleteFileResponse, error) {
 	started := time.Now()

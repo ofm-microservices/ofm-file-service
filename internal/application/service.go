@@ -136,6 +136,20 @@ func (s *fileService) GetFile(ctx context.Context, fileID string) (*domain.File,
 	return s.repo.GetByID(ctx, fileID)
 }
 
+func (s *fileService) GetFileURL(ctx context.Context, fileID string) (string, error) {
+	fileID = strings.TrimSpace(fileID)
+	if fileID == "" {
+		return "", domain.ErrInvalidFileID
+	}
+
+	file, err := s.repo.GetByID(ctx, fileID)
+	if err != nil {
+		return "", err
+	}
+
+	return s.storage.PublicURL(file.StoragePath), nil
+}
+
 func (s *fileService) DeleteFile(ctx context.Context, fileID string) error {
 	fileID = strings.TrimSpace(fileID)
 	if fileID == "" {

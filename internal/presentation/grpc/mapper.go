@@ -18,6 +18,7 @@ type FileMapper interface {
 	ToFileResponse(file *domain.File) *filev1.File
 	ToUploadResponse(file *domain.File) *filev1.UploadFileResponse
 	ToUploadFilesResponse(files []*domain.File) *filev1.UploadFilesResponse
+	ToFileURLResponse(fileID, url string) *filev1.GetFileURLResponse
 	ToDeleteResponse(fileID string) *filev1.DeleteFileResponse
 	ToError(err error) error
 }
@@ -94,6 +95,10 @@ func (m *fileMapper) ToUploadFilesResponse(files []*domain.File) *filev1.UploadF
 	}
 
 	return resp
+}
+
+func (m *fileMapper) ToFileURLResponse(fileID, url string) *filev1.GetFileURLResponse {
+	return &filev1.GetFileURLResponse{FileId: fileID, Url: url}
 }
 
 func (m *fileMapper) ToDeleteResponse(fileID string) *filev1.DeleteFileResponse {
