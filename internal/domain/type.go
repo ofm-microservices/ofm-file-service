@@ -30,5 +30,6 @@ type FileRepository interface {
 type FileStorage interface {
 	Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error)
 	PresignPut(ctx context.Context, objectKey, contentType string) (string, error)
+	PublicURL(objectKey string) string
 	Delete(ctx context.Context, objectKey string) error
 }

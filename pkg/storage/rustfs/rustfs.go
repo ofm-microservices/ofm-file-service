@@ -89,6 +89,10 @@ func (c *client) PresignPut(ctx context.Context, objectKey, contentType string) 
 	return fmt.Sprintf("%s/%s/%s", strings.TrimRight(c.endpoint, "/"), c.bucket, objectKey), nil
 }
 
+func (c *client) PublicURL(objectKey string) string {
+	return fmt.Sprintf("%s/%s/%s", strings.TrimRight(c.endpoint, "/"), c.bucket, objectKey)
+}
+
 func (c *client) Delete(ctx context.Context, objectKey string) error {
 	started := time.Now()
 	status := "success"
