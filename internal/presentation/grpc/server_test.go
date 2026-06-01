@@ -23,6 +23,7 @@ type fileSvcFake struct {
 	getFileFn     func(context.Context, string) (*domain.File, error)
 	deleteFileFn  func(context.Context, string) error
 	getURLFn      func(context.Context, string) (string, error)
+	getURLsFn     func(context.Context, []string) ([]domain.FileURL, error)
 	createArgs    []domain.UploadFileParams
 	createMany    []domain.UploadFilesParams
 	getIDs        []string
@@ -66,6 +67,19 @@ func (f *fileSvcFake) GetFileURL(ctx context.Context, fileID string) (string, er
 		return f.getURLFn(ctx, fileID)
 	}
 	return "http://public.local/" + fileID, nil
+}
+
+func (f *fileSvcFake) GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+	if f.getURLsFn != nil {
+		return f.getURLsFn(ctx, fileIDs)
+	}
+
+	urls := make([]domain.FileURL, 0, len(fileIDs))
+	for _, fileID := range fileIDs {
+		urls = append(urls, domain.FileURL{ID: fileID, URL: "http://public.local/" + fileID})
+	}
+
+	return urls, nil
 }
 
 func testLogger() logging.Logger {
@@ -269,5 +283,27 @@ var _ = Describe("RPC handlers", func() {
 
 		_, err = srv.DeleteFile(context.Background(), &filev1.DeleteFileRequest{FileId: "boom"})
 		Expect(status.Code(err)).To(Equal(codes.Internal))
+	})
+
+	It("gets file urls in batch", func() {
+		srv := &server{
+			svc: &fileSvcFake{
+				getURLsFn: func(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+					Expect(fileIDs).To(Equal([]string{"cover", "gallery"}))
+					return []domain.FileURL{
+						{ID: "cover", URL: "http://public.local/cover"},
+						{ID: "gallery", URL: "http://public.local/gallery"},
+					}, nil
+				},
+			},
+			log:  testLogger(),
+			mapr: newFileMapper(testLogger()),
+		}
+
+		resp, err := srv.GetFileURLs(context.Background(), &filev1.GetFileURLsRequest{FileIds: []string{"cover", "gallery"}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.GetFileUrls()).To(HaveLen(2))
+		Expect(resp.GetFileUrls()[0].GetFileId()).To(Equal("cover"))
+		Expect(resp.GetFileUrls()[1].GetUrl()).To(Equal("http://public.local/gallery"))
 	})
 })

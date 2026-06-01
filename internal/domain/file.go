@@ -17,3 +17,10 @@ type File struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+// FileURL pairs a file identifier with a public URL for read-model and API
+// responses.
+type FileURL struct {
+	ID  string
+	URL string
+}
