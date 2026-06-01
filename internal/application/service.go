@@ -150,6 +150,32 @@ func (s *fileService) GetFileURL(ctx context.Context, fileID string) (string, er
 	return s.storage.PublicURL(file.StoragePath), nil
 }
 
+func (s *fileService) GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+	if len(fileIDs) == 0 {
+		return nil, nil
+	}
+
+	urls := make([]domain.FileURL, 0, len(fileIDs))
+	for _, fileID := range fileIDs {
+		fileID = strings.TrimSpace(fileID)
+		if fileID == "" {
+			return nil, domain.ErrInvalidFileID
+		}
+
+		file, err := s.repo.GetByID(ctx, fileID)
+		if err != nil {
+			return nil, err
+		}
+
+		urls = append(urls, domain.FileURL{
+			ID:  fileID,
+			URL: s.storage.PublicURL(file.StoragePath),
+		})
+	}
+
+	return urls, nil
+}
+
 func (s *fileService) DeleteFile(ctx context.Context, fileID string) error {
 	fileID = strings.TrimSpace(fileID)
 	if fileID == "" {

@@ -17,5 +17,6 @@ type FileService interface {
 	CreateFiles(ctx context.Context, params domain.UploadFilesParams) ([]*domain.File, error)
 	GetFile(ctx context.Context, fileID string) (*domain.File, error)
 	GetFileURL(ctx context.Context, fileID string) (string, error)
+	GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error)
 	DeleteFile(ctx context.Context, fileID string) error
 }
