@@ -13,12 +13,12 @@ import (
 )
 
 type repoFake struct {
-	createFn   func(context.Context, domain.File) (*domain.File, error)
-	getFn      func(context.Context, string) (*domain.File, error)
-	deleteFn   func(context.Context, string) error
-	creates    []domain.File
-	getIDs     []string
-	deleteIDs  []string
+	createFn  func(context.Context, domain.File) (*domain.File, error)
+	getFn     func(context.Context, string) (*domain.File, error)
+	deleteFn  func(context.Context, string) error
+	creates   []domain.File
+	getIDs    []string
+	deleteIDs []string
 }
 
 func (r *repoFake) Create(ctx context.Context, file domain.File) (*domain.File, error) {
@@ -53,8 +53,9 @@ type storageCall struct {
 }
 
 type storageFake struct {
-	putFn     func(context.Context, string, string, []byte) (int64, error)
-	deleteFn  func(context.Context, string) error
+	putFn      func(context.Context, string, string, []byte) (int64, error)
+	existsFn   func(context.Context, string) (bool, error)
+	deleteFn   func(context.Context, string) error
 	putCalls   []storageCall
 	deleteKeys []string
 }
@@ -65,6 +66,13 @@ func (s *storageFake) PresignPut(ctx context.Context, objectKey, contentType str
 
 func (s *storageFake) PublicURL(objectKey string) string {
 	return "http://public.local/" + objectKey
+}
+
+func (s *storageFake) Exists(ctx context.Context, objectKey string) (bool, error) {
+	if s.existsFn != nil {
+		return s.existsFn(ctx, objectKey)
+	}
+	return true, nil
 }
 
 func (s *storageFake) Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error) {
@@ -269,6 +277,48 @@ var _ = Describe("GetFile", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(file.ID).To(Equal("file-1"))
 		Expect(repo.getIDs).To(Equal([]string{"file-1"}))
+	})
+})
+
+var _ = Describe("CompleteDirectUpload", func() {
+	It("returns the public url for stored metadata", func() {
+		repo := &repoFake{
+			getFn: func(ctx context.Context, fileID string) (*domain.File, error) {
+				return &domain.File{
+					ID:          fileID,
+					StoragePath: "chat-attachments/owner-1/" + fileID + ".png",
+				}, nil
+			},
+		}
+		storage := &storageFake{
+			existsFn: func(context.Context, string) (bool, error) { return true, nil },
+		}
+		svc := newTestService(repo, storage, "bucket")
+
+		file, url, err := svc.CompleteDirectUpload(context.Background(), "file-1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(file.ID).To(Equal("file-1"))
+		Expect(url).To(Equal("http://public.local/chat-attachments/owner-1/file-1.png"))
+	})
+
+	It("returns file not ready when the uploaded object is missing", func() {
+		repo := &repoFake{
+			getFn: func(ctx context.Context, fileID string) (*domain.File, error) {
+				return &domain.File{
+					ID:          fileID,
+					StoragePath: "chat-attachments/owner-1/" + fileID + ".png",
+				}, nil
+			},
+		}
+		storage := &storageFake{
+			existsFn: func(context.Context, string) (bool, error) { return false, nil },
+		}
+		svc := newTestService(repo, storage, "bucket")
+
+		file, url, err := svc.CompleteDirectUpload(context.Background(), "file-1")
+		Expect(file).To(BeNil())
+		Expect(url).To(BeEmpty())
+		Expect(err).To(MatchError(ErrFileNotReady))
 	})
 })
 

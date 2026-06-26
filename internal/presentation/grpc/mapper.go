@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"file-service/internal/application"
 	"file-service/internal/domain"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	filev1 "github.com/ofm-microservices/ofm-common/proto/file/v1"
@@ -15,9 +16,12 @@ import (
 type FileMapper interface {
 	ToUploadParams(req *filev1.UploadFileRequest) domain.UploadFileParams
 	ToUploadFilesParams(req *filev1.UploadFilesRequest) domain.UploadFilesParams
+	ToCreateDirectUploadParams(req *filev1.CreateDirectUploadRequest) domain.CreateDirectUploadParams
 	ToFileResponse(file *domain.File) *filev1.File
 	ToUploadResponse(file *domain.File) *filev1.UploadFileResponse
 	ToUploadFilesResponse(files []*domain.File) *filev1.UploadFilesResponse
+	ToCreateDirectUploadResponse(fileID, uploadURL string) *filev1.CreateDirectUploadResponse
+	ToCompleteDirectUploadResponse(file *domain.File, url string) *filev1.CompleteDirectUploadResponse
 	ToFileURLResponse(fileID, url string) *filev1.GetFileURLResponse
 	ToFileURLsResponse(urls []domain.FileURL) *filev1.GetFileURLsResponse
 	ToDeleteResponse(fileID string) *filev1.DeleteFileResponse
@@ -61,6 +65,16 @@ func (m *fileMapper) ToUploadFilesParams(req *filev1.UploadFilesRequest) domain.
 	}
 }
 
+func (m *fileMapper) ToCreateDirectUploadParams(req *filev1.CreateDirectUploadRequest) domain.CreateDirectUploadParams {
+	return domain.CreateDirectUploadParams{
+		OwnerID:     req.GetOwnerId(),
+		Filename:    req.GetFilename(),
+		ContentType: req.GetContentType(),
+		SizeBytes:   req.GetSizeBytes(),
+		Prefix:      "chat-attachments/" + req.GetOwnerId(),
+	}
+}
+
 func (m *fileMapper) ToFileResponse(file *domain.File) *filev1.File {
 	if file == nil {
 		return nil
@@ -96,6 +110,23 @@ func (m *fileMapper) ToUploadFilesResponse(files []*domain.File) *filev1.UploadF
 	}
 
 	return resp
+}
+
+func (m *fileMapper) ToCreateDirectUploadResponse(fileID, uploadURL string) *filev1.CreateDirectUploadResponse {
+	return &filev1.CreateDirectUploadResponse{
+		FileId:    fileID,
+		UploadUrl: uploadURL,
+		Method:    "PUT",
+		Headers:   map[string]string{},
+		ExpiresAt: time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339Nano),
+	}
+}
+
+func (m *fileMapper) ToCompleteDirectUploadResponse(file *domain.File, url string) *filev1.CompleteDirectUploadResponse {
+	return &filev1.CompleteDirectUploadResponse{
+		File: m.ToFileResponse(file),
+		Url:  url,
+	}
 }
 
 func (m *fileMapper) ToFileURLResponse(fileID, url string) *filev1.GetFileURLResponse {
@@ -136,6 +167,8 @@ func (m *fileMapper) ToError(err error) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, domain.ErrFileNotFound):
 		return status.Error(codes.NotFound, "file not found")
+	case errors.Is(err, application.ErrFileNotReady):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, domain.ErrFailedToStoreFile),
 		errors.Is(err, domain.ErrFailedToCreateFile),
 		errors.Is(err, domain.ErrFailedToFindFile),

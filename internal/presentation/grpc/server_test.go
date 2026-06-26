@@ -18,16 +18,18 @@ import (
 )
 
 type fileSvcFake struct {
-	createFileFn  func(context.Context, domain.UploadFileParams) (*domain.File, error)
-	createFilesFn func(context.Context, domain.UploadFilesParams) ([]*domain.File, error)
-	getFileFn     func(context.Context, string) (*domain.File, error)
-	deleteFileFn  func(context.Context, string) error
-	getURLFn      func(context.Context, string) (string, error)
-	getURLsFn     func(context.Context, []string) ([]domain.FileURL, error)
-	createArgs    []domain.UploadFileParams
-	createMany    []domain.UploadFilesParams
-	getIDs        []string
-	deleteIDs     []string
+	createFileFn           func(context.Context, domain.UploadFileParams) (*domain.File, error)
+	createFilesFn          func(context.Context, domain.UploadFilesParams) ([]*domain.File, error)
+	createDirectUploadFn   func(context.Context, domain.CreateDirectUploadParams) (*domain.File, string, error)
+	completeDirectUploadFn func(context.Context, string) (*domain.File, string, error)
+	getFileFn              func(context.Context, string) (*domain.File, error)
+	deleteFileFn           func(context.Context, string) error
+	getURLFn               func(context.Context, string) (string, error)
+	getURLsFn              func(context.Context, []string) ([]domain.FileURL, error)
+	createArgs             []domain.UploadFileParams
+	createMany             []domain.UploadFilesParams
+	getIDs                 []string
+	deleteIDs              []string
 }
 
 func (f *fileSvcFake) CreateFile(ctx context.Context, params domain.UploadFileParams) (*domain.File, error) {
@@ -44,6 +46,20 @@ func (f *fileSvcFake) CreateFiles(ctx context.Context, params domain.UploadFiles
 		return f.createFilesFn(ctx, params)
 	}
 	return []*domain.File{}, nil
+}
+
+func (f *fileSvcFake) CreateDirectUpload(ctx context.Context, params domain.CreateDirectUploadParams) (*domain.File, string, error) {
+	if f.createDirectUploadFn != nil {
+		return f.createDirectUploadFn(ctx, params)
+	}
+	return &domain.File{ID: "file-1", OwnerID: params.OwnerID, Filename: params.Filename}, "http://upload.local/file-1", nil
+}
+
+func (f *fileSvcFake) CompleteDirectUpload(ctx context.Context, fileID string) (*domain.File, string, error) {
+	if f.completeDirectUploadFn != nil {
+		return f.completeDirectUploadFn(ctx, fileID)
+	}
+	return &domain.File{ID: fileID}, "http://public.local/" + fileID, nil
 }
 
 func (f *fileSvcFake) GetFile(ctx context.Context, fileID string) (*domain.File, error) {
@@ -306,4 +322,5 @@ var _ = Describe("RPC handlers", func() {
 		Expect(resp.GetFileUrls()[0].GetFileId()).To(Equal("cover"))
 		Expect(resp.GetFileUrls()[1].GetUrl()).To(Equal("http://public.local/gallery"))
 	})
+
 })
