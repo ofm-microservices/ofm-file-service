@@ -3,6 +3,7 @@ package rustfs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,19 +12,25 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 )
 
 type client struct {
-	bucket string
-	s3     s3API
-	endpoint string
+	bucket    string
+	s3        s3API
+	presigner s3PresignAPI
+	endpoint  string
 }
 
 var loadDefaultConfig = awsconfig.LoadDefaultConfig
 
 var newS3Client = func(cfg aws.Config, optFns ...func(*s3.Options)) s3API {
 	return s3.NewFromConfig(cfg, optFns...)
+}
+
+var newS3Presigner = func(cfg aws.Config, optFns ...func(*s3.Options)) s3PresignAPI {
+	return s3.NewPresignClient(s3.NewFromConfig(cfg, optFns...))
 }
 
 var sleep = time.Sleep
@@ -40,12 +47,17 @@ func Open(ctx context.Context, cfg Options) (Storage, error) {
 		return nil, WrapLoadConfigError(err)
 	}
 
-	s3Client := newS3Client(awsCfg, func(o *s3.Options) {
+	s3Options := func(o *s3.Options) {
 		o.UsePathStyle = true
 		o.BaseEndpoint = aws.String(cfg.Endpoint)
-	})
+	}
 
-	c := &client{bucket: cfg.Bucket, s3: s3Client, endpoint: cfg.Endpoint}
+	c := &client{
+		bucket:    cfg.Bucket,
+		s3:        newS3Client(awsCfg, s3Options),
+		presigner: newS3Presigner(awsCfg, s3Options),
+		endpoint:  cfg.Endpoint,
+	}
 	var lastErr error
 	for i := 0; i < 10; i++ {
 		if _, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(cfg.Bucket)}); err == nil {
@@ -84,13 +96,34 @@ func (c *client) Put(ctx context.Context, objectKey, contentType string, data []
 }
 
 func (c *client) PresignPut(ctx context.Context, objectKey, contentType string) (string, error) {
-	_ = ctx
-	_ = contentType
-	return fmt.Sprintf("%s/%s/%s", strings.TrimRight(c.endpoint, "/"), c.bucket, objectKey), nil
+	req, err := c.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(c.bucket),
+		Key:         aws.String(objectKey),
+		ContentType: aws.String(contentType),
+	})
+	if err != nil {
+		return "", WrapPresignPutObjectError(objectKey, err)
+	}
+	return req.URL, nil
 }
 
 func (c *client) PublicURL(objectKey string) string {
 	return fmt.Sprintf("%s/%s/%s", strings.TrimRight(c.endpoint, "/"), c.bucket, objectKey)
+}
+
+func (c *client) Exists(ctx context.Context, objectKey string) (bool, error) {
+	_, err := c.s3.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err == nil {
+		return true, nil
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFound" {
+		return false, nil
+	}
+	return false, WrapHeadObjectError(objectKey, err)
 }
 
 func (c *client) Delete(ctx context.Context, objectKey string) error {

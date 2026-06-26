@@ -42,8 +42,9 @@ func (s *storageStub) Put(context.Context, string, string, []byte) (int64, error
 func (s *storageStub) PresignPut(context.Context, string, string) (string, error) {
 	return "http://upload.local", nil
 }
-func (s *storageStub) Delete(context.Context, string) error { return nil }
-func (s *storageStub) PublicURL(string) string              { return "http://public.local/file-1" }
+func (s *storageStub) Exists(context.Context, string) (bool, error) { return true, nil }
+func (s *storageStub) Delete(context.Context, string) error         { return nil }
+func (s *storageStub) PublicURL(string) string                      { return "http://public.local/file-1" }
 
 type lifecycleStub struct {
 	hooks []fx.Hook
@@ -206,6 +207,12 @@ func (fileServiceStub) CreateFiles(context.Context, domain.UploadFilesParams) ([
 }
 func (fileServiceStub) GetFile(context.Context, string) (*domain.File, error) {
 	return nil, nil
+}
+func (fileServiceStub) CreateDirectUpload(context.Context, domain.CreateDirectUploadParams) (*domain.File, string, error) {
+	return nil, "", nil
+}
+func (fileServiceStub) CompleteDirectUpload(context.Context, string) (*domain.File, string, error) {
+	return nil, "", nil
 }
 func (fileServiceStub) GetFileURL(context.Context, string) (string, error) {
 	return "", nil

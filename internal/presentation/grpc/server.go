@@ -114,6 +114,45 @@ func (s *server) UploadFiles(ctx context.Context, req *filev1.UploadFilesRequest
 	return s.mapr.ToUploadFilesResponse(files), nil
 }
 
+// CreateDirectUpload reserves metadata and a presigned upload URL for direct client uploads.
+func (s *server) CreateDirectUpload(ctx context.Context, req *filev1.CreateDirectUploadRequest) (*filev1.CreateDirectUploadResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	file, uploadURL, err := s.svc.CreateDirectUpload(ctx, s.mapr.ToCreateDirectUploadParams(req))
+	if err != nil {
+		log.Error("create direct upload failed",
+			logging.Operation("grpc.file.create_direct_upload"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("owner_id", req.GetOwnerId()),
+			logging.String("filename", req.GetFilename()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+	return s.mapr.ToCreateDirectUploadResponse(file.ID, uploadURL), nil
+}
+
+// CompleteDirectUpload finalizes a direct upload and returns file metadata plus public URL.
+func (s *server) CompleteDirectUpload(ctx context.Context, req *filev1.CompleteDirectUploadRequest) (*filev1.CompleteDirectUploadResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	file, url, err := s.svc.CompleteDirectUpload(ctx, req.GetFileId())
+	if err != nil {
+		log.Error("complete direct upload failed",
+			logging.Operation("grpc.file.complete_direct_upload"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+	return s.mapr.ToCompleteDirectUploadResponse(file, url), nil
+}
+
 // GetFile returns the file metadata from the write model.
 func (s *server) GetFile(ctx context.Context, req *filev1.GetFileRequest) (*filev1.GetFileResponse, error) {
 	started := time.Now()

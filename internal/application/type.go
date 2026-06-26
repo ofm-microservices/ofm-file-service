@@ -15,6 +15,8 @@ type Logger = logging.Logger
 type FileService interface {
 	CreateFile(ctx context.Context, params domain.UploadFileParams) (*domain.File, error)
 	CreateFiles(ctx context.Context, params domain.UploadFilesParams) ([]*domain.File, error)
+	CreateDirectUpload(ctx context.Context, params domain.CreateDirectUploadParams) (*domain.File, string, error)
+	CompleteDirectUpload(ctx context.Context, fileID string) (*domain.File, string, error)
 	GetFile(ctx context.Context, fileID string) (*domain.File, error)
 	GetFileURL(ctx context.Context, fileID string) (string, error)
 	GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error)

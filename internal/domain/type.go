@@ -19,6 +19,15 @@ type UploadFilesParams struct {
 	Files   []UploadFileParams
 }
 
+// CreateDirectUploadParams carries the metadata needed to reserve a direct upload.
+type CreateDirectUploadParams struct {
+	OwnerID     string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	Prefix      string
+}
+
 // FileRepository persists the authoritative file metadata write model.
 type FileRepository interface {
 	Create(ctx context.Context, file File) (*File, error)
@@ -31,5 +40,6 @@ type FileStorage interface {
 	Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error)
 	PresignPut(ctx context.Context, objectKey, contentType string) (string, error)
 	PublicURL(objectKey string) string
+	Exists(ctx context.Context, objectKey string) (bool, error)
 	Delete(ctx context.Context, objectKey string) error
 }
