@@ -8,19 +8,20 @@ import (
 	"file-service/internal/domain"
 	"file-service/internal/infra/write/scylla/model"
 	"github.com/gocql/gocql"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 type repoQuery struct {
-	stmt          string
-	execErr       error
-	scanErr       error
-	scanRow       model.FileRow
-	scanCalled    int
-	execCalled    int
-	ctxCalled     int
-	consistency   gocql.Consistency
+	stmt           string
+	execErr        error
+	scanErr        error
+	scanRow        model.FileRow
+	scanCalled     int
+	execCalled     int
+	ctxCalled      int
+	consistency    gocql.Consistency
 	consistencySet bool
 }
 
@@ -88,7 +89,10 @@ func (s *repoSession) Query(stmt string, _ ...any) query {
 
 var _ = Describe("New", func() {
 	It("rejects a nil session", func() {
-		repo, err := New(nil)
+		logger, err := logging.New("file-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+
+		repo, err := New(nil, logger)
 		Expect(repo).To(BeNil())
 		Expect(err).To(MatchError(ErrNilScyllaDB))
 	})
@@ -109,8 +113,18 @@ var _ = Describe("repo operations", func() {
 		deleteStmt = deleteFileByIDQuery
 	)
 
+	var logger logging.Logger
+
+	BeforeEach(func() {
+		var err error
+		logger, err = logging.New("file-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("creates and reloads a file", func() {
 		now := time.Unix(123, 456).UTC()
+		logger, err := logging.New("file-service", "test", "debug")
+		Expect(err).NotTo(HaveOccurred())
 		session := &repoSession{
 			queries: map[string]*repoQuery{
 				createStmt: &repoQuery{scanRow: model.FileRow{}},
@@ -130,7 +144,7 @@ var _ = Describe("repo operations", func() {
 				},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.Create(context.Background(), domain.File{
 			ID:          "file-1",
@@ -158,7 +172,7 @@ var _ = Describe("repo operations", func() {
 				createStmt: &repoQuery{execErr: errors.New("boom")},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.Create(context.Background(), domain.File{ID: "file-1"})
 		Expect(file).To(BeNil())
@@ -185,7 +199,7 @@ var _ = Describe("repo operations", func() {
 				},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.GetByID(context.Background(), "file-1")
 		Expect(err).NotTo(HaveOccurred())
@@ -200,7 +214,7 @@ var _ = Describe("repo operations", func() {
 				getStmt: &repoQuery{scanErr: gocql.ErrNotFound},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		file, err := repo.GetByID(context.Background(), "missing")
 		Expect(file).To(BeNil())
@@ -233,7 +247,7 @@ var _ = Describe("repo operations", func() {
 				deleteStmt: &repoQuery{},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		Expect(repo.DeleteByID(context.Background(), "file-1")).To(Succeed())
 		Expect(session.queries[deleteStmt].execCalled).To(Equal(1))
@@ -246,7 +260,7 @@ var _ = Describe("repo operations", func() {
 				deleteStmt: &repoQuery{execErr: errors.New("boom")},
 			},
 		}
-		repo := &repo{db: session}
+		repo := &repo{db: session, log: logger}
 
 		Expect(repo.DeleteByID(context.Background(), "missing")).To(MatchError(ContainSubstring("find file")))
 

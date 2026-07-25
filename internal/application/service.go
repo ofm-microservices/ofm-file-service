@@ -8,7 +8,7 @@ import (
 
 	"file-service/internal/domain"
 	"github.com/google/uuid"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 )
 
 type fileService struct {
@@ -134,6 +134,110 @@ func (s *fileService) GetFile(ctx context.Context, fileID string) (*domain.File,
 	}
 
 	return s.repo.GetByID(ctx, fileID)
+}
+
+func (s *fileService) CreateDirectUpload(ctx context.Context, params domain.CreateDirectUploadParams) (*domain.File, string, error) {
+	ownerID := strings.TrimSpace(params.OwnerID)
+	prefix := strings.Trim(strings.TrimSpace(params.Prefix), "/")
+	filename := strings.TrimSpace(params.Filename)
+	contentType := strings.TrimSpace(params.ContentType)
+	switch {
+	case ownerID == "":
+		return nil, "", domain.ErrInvalidOwnerID
+	case prefix == "":
+		return nil, "", domain.ErrInvalidStoragePath
+	case filename == "":
+		return nil, "", domain.ErrInvalidFilename
+	case contentType == "":
+		return nil, "", domain.ErrInvalidContentType
+	case params.SizeBytes <= 0:
+		return nil, "", domain.ErrInvalidFileData
+	}
+
+	fileID := uuid.Must(uuid.NewV7()).String()
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filename)), ".")
+	objectKey := buildObjectKey(prefix, fileID, ext)
+	uploadURL, err := s.storage.PresignPut(ctx, objectKey, contentType)
+	if err != nil {
+		s.log.Error("presign direct upload failed", logging.String("file_id", fileID), logging.Err(err))
+		return nil, "", domain.ErrFailedToStoreFile
+	}
+
+	now := time.Now().UTC()
+	file := domain.File{
+		ID:          fileID,
+		OwnerID:     ownerID,
+		Filename:    filename,
+		Extension:   ext,
+		ContentType: contentType,
+		Bucket:      s.bucket,
+		StoragePath: objectKey,
+		SizeBytes:   params.SizeBytes,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	created, err := s.repo.Create(ctx, file)
+	if err != nil {
+		s.log.Error("create direct upload metadata failed", logging.String("file_id", fileID), logging.Err(err))
+		return nil, "", err
+	}
+	return created, uploadURL, nil
+}
+
+func (s *fileService) CompleteDirectUpload(ctx context.Context, fileID string) (*domain.File, string, error) {
+	file, err := s.GetFile(ctx, fileID)
+	if err != nil {
+		return nil, "", err
+	}
+	exists, err := s.storage.Exists(ctx, file.StoragePath)
+	if err != nil {
+		s.log.Error("check direct upload object failed", logging.String("file_id", fileID), logging.Err(err))
+		return nil, "", domain.ErrFailedToFindFile
+	}
+	if !exists {
+		return nil, "", ErrFileNotReady
+	}
+	return file, s.storage.PublicURL(file.StoragePath), nil
+}
+
+func (s *fileService) GetFileURL(ctx context.Context, fileID string) (string, error) {
+	fileID = strings.TrimSpace(fileID)
+	if fileID == "" {
+		return "", domain.ErrInvalidFileID
+	}
+
+	file, err := s.repo.GetByID(ctx, fileID)
+	if err != nil {
+		return "", err
+	}
+
+	return s.storage.PublicURL(file.StoragePath), nil
+}
+
+func (s *fileService) GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+	if len(fileIDs) == 0 {
+		return nil, nil
+	}
+
+	urls := make([]domain.FileURL, 0, len(fileIDs))
+	for _, fileID := range fileIDs {
+		fileID = strings.TrimSpace(fileID)
+		if fileID == "" {
+			return nil, domain.ErrInvalidFileID
+		}
+
+		file, err := s.repo.GetByID(ctx, fileID)
+		if err != nil {
+			return nil, err
+		}
+
+		urls = append(urls, domain.FileURL{
+			ID:  fileID,
+			URL: s.storage.PublicURL(file.StoragePath),
+		})
+	}
+
+	return urls, nil
 }
 
 func (s *fileService) DeleteFile(ctx context.Context, fileID string) error {

@@ -6,9 +6,12 @@ import (
 	"net"
 
 	"file-service/config"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	filev1 "github.com/ofm-microseervices/ofm-common/proto/file/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
+	filev1 "github.com/ofm-microservices/ofm-common/proto/file/v1"
+	otelgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"time"
 )
 
 type server struct {
@@ -30,7 +33,10 @@ func NewServer(svc FileService, cfg config.GRPCConfig, log logging.Logger) (Serv
 		return nil, ErrNilLogger
 	}
 
-	grpcSrv := grpc.NewServer()
+	grpcSrv := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()),
+	)
 	s := &server{
 		svc:  svc,
 		cfg:  cfg,
@@ -69,8 +75,19 @@ func (s *server) Shutdown(context.Context) error {
 
 // UploadFile stores a file object and its metadata.
 func (s *server) UploadFile(ctx context.Context, req *filev1.UploadFileRequest) (*filev1.UploadFileResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	file, err := s.svc.CreateFile(ctx, s.mapr.ToUploadParams(req))
 	if err != nil {
+		log.Error("upload file failed",
+			logging.Operation("grpc.file.upload"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("owner_id", req.GetOwnerId()),
+			logging.String("filename", req.GetFilename()),
+			logging.Err(err),
+		)
 		return nil, s.mapr.ToError(err)
 	}
 
@@ -80,27 +97,135 @@ func (s *server) UploadFile(ctx context.Context, req *filev1.UploadFileRequest) 
 // UploadFiles stores a batch of file objects and publishes their creation as a
 // single event.
 func (s *server) UploadFiles(ctx context.Context, req *filev1.UploadFilesRequest) (*filev1.UploadFilesResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	files, err := s.svc.CreateFiles(ctx, s.mapr.ToUploadFilesParams(req))
 	if err != nil {
+		log.Error("upload files failed",
+			logging.Operation("grpc.file.upload_many"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.Err(err),
+		)
 		return nil, s.mapr.ToError(err)
 	}
 
 	return s.mapr.ToUploadFilesResponse(files), nil
 }
 
+// CreateDirectUpload reserves metadata and a presigned upload URL for direct client uploads.
+func (s *server) CreateDirectUpload(ctx context.Context, req *filev1.CreateDirectUploadRequest) (*filev1.CreateDirectUploadResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	file, uploadURL, err := s.svc.CreateDirectUpload(ctx, s.mapr.ToCreateDirectUploadParams(req))
+	if err != nil {
+		log.Error("create direct upload failed",
+			logging.Operation("grpc.file.create_direct_upload"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("owner_id", req.GetOwnerId()),
+			logging.String("filename", req.GetFilename()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+	return s.mapr.ToCreateDirectUploadResponse(file.ID, uploadURL), nil
+}
+
+// CompleteDirectUpload finalizes a direct upload and returns file metadata plus public URL.
+func (s *server) CompleteDirectUpload(ctx context.Context, req *filev1.CompleteDirectUploadRequest) (*filev1.CompleteDirectUploadResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	file, url, err := s.svc.CompleteDirectUpload(ctx, req.GetFileId())
+	if err != nil {
+		log.Error("complete direct upload failed",
+			logging.Operation("grpc.file.complete_direct_upload"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+	return s.mapr.ToCompleteDirectUploadResponse(file, url), nil
+}
+
 // GetFile returns the file metadata from the write model.
 func (s *server) GetFile(ctx context.Context, req *filev1.GetFileRequest) (*filev1.GetFileResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	file, err := s.svc.GetFile(ctx, req.GetFileId())
 	if err != nil {
+		log.Error("get file failed",
+			logging.Operation("grpc.file.get"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
 		return nil, s.mapr.ToError(err)
 	}
 
 	return &filev1.GetFileResponse{File: s.mapr.ToFileResponse(file)}, nil
 }
 
+// GetFileURL returns the public URL for a file stored in RustFS.
+func (s *server) GetFileURL(ctx context.Context, req *filev1.GetFileURLRequest) (*filev1.GetFileURLResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	url, err := s.svc.GetFileURL(ctx, req.GetFileId())
+	if err != nil {
+		log.Error("get file url failed",
+			logging.Operation("grpc.file.get_url"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+
+	return s.mapr.ToFileURLResponse(req.GetFileId(), url), nil
+}
+
+// GetFileURLs returns public URLs for multiple files stored in RustFS.
+func (s *server) GetFileURLs(ctx context.Context, req *filev1.GetFileURLsRequest) (*filev1.GetFileURLsResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
+	urls, err := s.svc.GetFileURLs(ctx, req.GetFileIds())
+	if err != nil {
+		log.Error("get file urls failed",
+			logging.Operation("grpc.file.get_urls"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.Int("file_ids", len(req.GetFileIds())),
+			logging.Err(err),
+		)
+		return nil, s.mapr.ToError(err)
+	}
+
+	return s.mapr.ToFileURLsResponse(urls), nil
+}
+
 // DeleteFile deletes the file object and its metadata.
 func (s *server) DeleteFile(ctx context.Context, req *filev1.DeleteFileRequest) (*filev1.DeleteFileResponse, error) {
+	started := time.Now()
+	log := logging.WithContext(ctx, s.log)
 	if err := s.svc.DeleteFile(ctx, req.GetFileId()); err != nil {
+		log.Error("delete file failed",
+			logging.Operation("grpc.file.delete"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.DurationMS(time.Since(started)),
+			logging.String("file_id", req.GetFileId()),
+			logging.Err(err),
+		)
 		return nil, s.mapr.ToError(err)
 	}
 

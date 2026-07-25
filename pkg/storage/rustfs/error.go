@@ -17,7 +17,17 @@ func WrapPutObjectError(objectKey string, err error) error {
 	return fmt.Errorf("put object %s: %w", objectKey, err)
 }
 
+// WrapPresignPutObjectError annotates direct upload URL generation failures.
+func WrapPresignPutObjectError(objectKey string, err error) error {
+	return fmt.Errorf("presign put object %s: %w", objectKey, err)
+}
+
 // WrapDeleteObjectError annotates object deletion failures.
 func WrapDeleteObjectError(objectKey string, err error) error {
 	return fmt.Errorf("delete object %s: %w", objectKey, err)
+}
+
+// WrapHeadObjectError annotates object existence lookup failures.
+func WrapHeadObjectError(objectKey string, err error) error {
+	return fmt.Errorf("head object %s: %w", objectKey, err)
 }

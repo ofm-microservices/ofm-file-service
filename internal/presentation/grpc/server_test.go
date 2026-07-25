@@ -8,8 +8,8 @@ import (
 	"file-service/config"
 	"file-service/internal/domain"
 	"github.com/google/uuid"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
-	filev1 "github.com/ofm-microseervices/ofm-common/proto/file/v1"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	filev1 "github.com/ofm-microservices/ofm-common/proto/file/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
@@ -18,14 +18,18 @@ import (
 )
 
 type fileSvcFake struct {
-	createFileFn  func(context.Context, domain.UploadFileParams) (*domain.File, error)
-	createFilesFn func(context.Context, domain.UploadFilesParams) ([]*domain.File, error)
-	getFileFn     func(context.Context, string) (*domain.File, error)
-	deleteFileFn  func(context.Context, string) error
-	createArgs    []domain.UploadFileParams
-	createMany    []domain.UploadFilesParams
-	getIDs        []string
-	deleteIDs     []string
+	createFileFn           func(context.Context, domain.UploadFileParams) (*domain.File, error)
+	createFilesFn          func(context.Context, domain.UploadFilesParams) ([]*domain.File, error)
+	createDirectUploadFn   func(context.Context, domain.CreateDirectUploadParams) (*domain.File, string, error)
+	completeDirectUploadFn func(context.Context, string) (*domain.File, string, error)
+	getFileFn              func(context.Context, string) (*domain.File, error)
+	deleteFileFn           func(context.Context, string) error
+	getURLFn               func(context.Context, string) (string, error)
+	getURLsFn              func(context.Context, []string) ([]domain.FileURL, error)
+	createArgs             []domain.UploadFileParams
+	createMany             []domain.UploadFilesParams
+	getIDs                 []string
+	deleteIDs              []string
 }
 
 func (f *fileSvcFake) CreateFile(ctx context.Context, params domain.UploadFileParams) (*domain.File, error) {
@@ -44,6 +48,20 @@ func (f *fileSvcFake) CreateFiles(ctx context.Context, params domain.UploadFiles
 	return []*domain.File{}, nil
 }
 
+func (f *fileSvcFake) CreateDirectUpload(ctx context.Context, params domain.CreateDirectUploadParams) (*domain.File, string, error) {
+	if f.createDirectUploadFn != nil {
+		return f.createDirectUploadFn(ctx, params)
+	}
+	return &domain.File{ID: "file-1", OwnerID: params.OwnerID, Filename: params.Filename}, "http://upload.local/file-1", nil
+}
+
+func (f *fileSvcFake) CompleteDirectUpload(ctx context.Context, fileID string) (*domain.File, string, error) {
+	if f.completeDirectUploadFn != nil {
+		return f.completeDirectUploadFn(ctx, fileID)
+	}
+	return &domain.File{ID: fileID}, "http://public.local/" + fileID, nil
+}
+
 func (f *fileSvcFake) GetFile(ctx context.Context, fileID string) (*domain.File, error) {
 	f.getIDs = append(f.getIDs, fileID)
 	if f.getFileFn != nil {
@@ -58,6 +76,26 @@ func (f *fileSvcFake) DeleteFile(ctx context.Context, fileID string) error {
 		return f.deleteFileFn(ctx, fileID)
 	}
 	return nil
+}
+
+func (f *fileSvcFake) GetFileURL(ctx context.Context, fileID string) (string, error) {
+	if f.getURLFn != nil {
+		return f.getURLFn(ctx, fileID)
+	}
+	return "http://public.local/" + fileID, nil
+}
+
+func (f *fileSvcFake) GetFileURLs(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+	if f.getURLsFn != nil {
+		return f.getURLsFn(ctx, fileIDs)
+	}
+
+	urls := make([]domain.FileURL, 0, len(fileIDs))
+	for _, fileID := range fileIDs {
+		urls = append(urls, domain.FileURL{ID: fileID, URL: "http://public.local/" + fileID})
+	}
+
+	return urls, nil
 }
 
 func testLogger() logging.Logger {
@@ -86,7 +124,7 @@ var _ = Describe("server lifecycle", func() {
 	It("returns an error when the listener cannot be created", func() {
 		srv := &server{
 			svc: &fileSvcFake{},
-			cfg: config.GRPCConfig{Host: "invalid host", Port: 9094},
+			cfg: config.GRPCConfig{Host: "invalid host", Port: 9504},
 			log: testLogger(),
 			srv: grpc.NewServer(),
 		}
@@ -147,7 +185,7 @@ var _ = Describe("RPC handlers", func() {
 					return nil, domain.ErrInvalidFilename
 				},
 			},
-			log: testLogger(),
+			log:  testLogger(),
 			mapr: newFileMapper(testLogger()),
 		}
 
@@ -262,4 +300,27 @@ var _ = Describe("RPC handlers", func() {
 		_, err = srv.DeleteFile(context.Background(), &filev1.DeleteFileRequest{FileId: "boom"})
 		Expect(status.Code(err)).To(Equal(codes.Internal))
 	})
+
+	It("gets file urls in batch", func() {
+		srv := &server{
+			svc: &fileSvcFake{
+				getURLsFn: func(ctx context.Context, fileIDs []string) ([]domain.FileURL, error) {
+					Expect(fileIDs).To(Equal([]string{"cover", "gallery"}))
+					return []domain.FileURL{
+						{ID: "cover", URL: "http://public.local/cover"},
+						{ID: "gallery", URL: "http://public.local/gallery"},
+					}, nil
+				},
+			},
+			log:  testLogger(),
+			mapr: newFileMapper(testLogger()),
+		}
+
+		resp, err := srv.GetFileURLs(context.Background(), &filev1.GetFileURLsRequest{FileIds: []string{"cover", "gallery"}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.GetFileUrls()).To(HaveLen(2))
+		Expect(resp.GetFileUrls()[0].GetFileId()).To(Equal("cover"))
+		Expect(resp.GetFileUrls()[1].GetUrl()).To(Equal("http://public.local/gallery"))
+	})
+
 })

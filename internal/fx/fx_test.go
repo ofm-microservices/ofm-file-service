@@ -12,7 +12,7 @@ import (
 	pkgrustfs "file-service/pkg/storage/rustfs"
 	pkgscylla "file-service/pkg/storage/scylla"
 	"github.com/gocql/gocql"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/fx"
@@ -23,23 +23,28 @@ type loggerStub struct {
 	errors []string
 }
 
-func (l *loggerStub) Debug(string, ...logging.Field) {}
-func (l *loggerStub) Info(msg string, _ ...logging.Field) { l.infos = append(l.infos, msg) }
-func (l *loggerStub) Warn(string, ...logging.Field) {}
-func (l *loggerStub) Error(msg string, _ ...logging.Field) { l.errors = append(l.errors, msg) }
+func (l *loggerStub) Debug(string, ...logging.Field)         {}
+func (l *loggerStub) Info(msg string, _ ...logging.Field)    { l.infos = append(l.infos, msg) }
+func (l *loggerStub) Warn(string, ...logging.Field)          {}
+func (l *loggerStub) Error(msg string, _ ...logging.Field)   { l.errors = append(l.errors, msg) }
 func (l *loggerStub) With(_ ...logging.Field) logging.Logger { return l }
-func (l *loggerStub) Sync() error { return nil }
+func (l *loggerStub) Sync() error                            { return nil }
 
 type repoStub struct{}
 
 func (r *repoStub) Create(context.Context, domain.File) (*domain.File, error) { return nil, nil }
-func (r *repoStub) GetByID(context.Context, string) (*domain.File, error)      { return nil, nil }
-func (r *repoStub) DeleteByID(context.Context, string) error                   { return nil }
+func (r *repoStub) GetByID(context.Context, string) (*domain.File, error)     { return nil, nil }
+func (r *repoStub) DeleteByID(context.Context, string) error                  { return nil }
 
 type storageStub struct{}
 
 func (s *storageStub) Put(context.Context, string, string, []byte) (int64, error) { return 0, nil }
-func (s *storageStub) Delete(context.Context, string) error                       { return nil }
+func (s *storageStub) PresignPut(context.Context, string, string) (string, error) {
+	return "http://upload.local", nil
+}
+func (s *storageStub) Exists(context.Context, string) (bool, error) { return true, nil }
+func (s *storageStub) Delete(context.Context, string) error         { return nil }
+func (s *storageStub) PublicURL(string) string                      { return "http://public.local/file-1" }
 
 type lifecycleStub struct {
 	hooks []fx.Hook
@@ -49,10 +54,10 @@ func (l *lifecycleStub) Append(h fx.Hook) { l.hooks = append(l.hooks, h) }
 
 type scyllaQueryStub struct {
 	execErr error
-	execCnt  int
+	execCnt int
 }
 
-func (q *scyllaQueryStub) WithContext(context.Context) pkgscylla.Query { return q }
+func (q *scyllaQueryStub) WithContext(context.Context) pkgscylla.Query   { return q }
 func (q *scyllaQueryStub) Consistency(gocql.Consistency) pkgscylla.Query { return q }
 func (q *scyllaQueryStub) Exec() error {
 	q.execCnt++
@@ -104,11 +109,11 @@ var _ = Describe("providers", func() {
 	})
 
 	It("constructs the repository", func() {
-		repo, err := ProvideFileRepository(&gocql.Session{})
+		repo, err := ProvideFileRepository(&gocql.Session{}, &loggerStub{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(repo).NotTo(BeNil())
 
-		repo, err = ProvideFileRepository(nil)
+		repo, err = ProvideFileRepository(nil, &loggerStub{})
 		Expect(err).To(MatchError(writerepo.ErrNilScyllaDB))
 	})
 
@@ -120,7 +125,7 @@ var _ = Describe("providers", func() {
 	})
 
 	It("constructs the gRPC server", func() {
-		cfg := &config.Config{GRPC: config.GRPCConfig{Host: "127.0.0.1", Port: 9094}}
+		cfg := &config.Config{GRPC: config.GRPCConfig{Host: "127.0.0.1", Port: 9504}}
 		srv, err := ProvideGRPCServer(&fileServiceStub{}, cfg, &loggerStub{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(srv).NotTo(BeNil())
@@ -201,6 +206,18 @@ func (fileServiceStub) CreateFiles(context.Context, domain.UploadFilesParams) ([
 	return nil, nil
 }
 func (fileServiceStub) GetFile(context.Context, string) (*domain.File, error) {
+	return nil, nil
+}
+func (fileServiceStub) CreateDirectUpload(context.Context, domain.CreateDirectUploadParams) (*domain.File, string, error) {
+	return nil, "", nil
+}
+func (fileServiceStub) CompleteDirectUpload(context.Context, string) (*domain.File, string, error) {
+	return nil, "", nil
+}
+func (fileServiceStub) GetFileURL(context.Context, string) (string, error) {
+	return "", nil
+}
+func (fileServiceStub) GetFileURLs(context.Context, []string) ([]domain.FileURL, error) {
 	return nil, nil
 }
 func (fileServiceStub) DeleteFile(context.Context, string) error { return nil }

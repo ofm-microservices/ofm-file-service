@@ -9,6 +9,8 @@ var (
 	ErrNilFileStorage = errors.New("file storage is nil")
 	// ErrEmptyBucket reports a missing RustFS bucket name.
 	ErrEmptyBucket = errors.New("bucket is empty")
+	// ErrFileNotReady reports that the direct upload object is not present yet.
+	ErrFileNotReady = errors.New("file not ready")
 	// ErrNilLogger reports a missing logger dependency.
 	ErrNilLogger = errors.New("logger is nil")
 )

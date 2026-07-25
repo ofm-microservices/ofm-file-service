@@ -7,7 +7,7 @@ import (
 	"file-service/internal/domain"
 	pkgrustfs "file-service/pkg/storage/rustfs"
 	pkgscylla "file-service/pkg/storage/scylla"
-	"github.com/ofm-microseervices/ofm-common/pkg/logging"
+	"github.com/ofm-microservices/ofm-common/pkg/logging"
 
 	"github.com/gocql/gocql"
 	"go.uber.org/fx"
