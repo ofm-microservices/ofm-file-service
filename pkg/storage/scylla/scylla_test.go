@@ -13,10 +13,10 @@ import (
 
 type fakeQuery struct {
 	execErr error
-	execCnt  int
+	execCnt int
 }
 
-func (q *fakeQuery) WithContext(context.Context) Query { return q }
+func (q *fakeQuery) WithContext(context.Context) Query   { return q }
 func (q *fakeQuery) Consistency(gocql.Consistency) Query { return q }
 func (q *fakeQuery) Exec() error {
 	q.execCnt++
@@ -24,10 +24,10 @@ func (q *fakeQuery) Exec() error {
 }
 
 type fakeSession struct {
-	queries []string
-	queryFn func(string) *fakeQuery
+	queries  []string
+	queryFn  func(string) *fakeQuery
 	closeCnt int
-	mu      sync.Mutex
+	mu       sync.Mutex
 }
 
 func (s *fakeSession) Close() {

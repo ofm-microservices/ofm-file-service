@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/ofm-microservices/ofm-common/pkg/observability/cql"
 )
 
 // Session abstracts the Scylla session behavior used by the bootstrap logic.
@@ -86,6 +87,7 @@ type Options struct {
 // owned by file-service, and returns the application session.
 func ConnectAndEnsureSchema(cfg Options) (Session, error) {
 	cluster := gocql.NewCluster(cfg.Hosts...)
+	cluster.QueryObserver = cql.Observer{Service: "file-service"}
 	cluster.Port = cfg.Port
 	cluster.Timeout = cfg.ConnectTimeout
 	cluster.ConnectTimeout = cfg.ConnectTimeout
@@ -148,6 +150,18 @@ func ConnectAndEnsureSchema(cfg Options) (Session, error) {
 			updated_at TIMESTAMP
 		)
 	`).Exec(); err != nil {
+		app.Close()
+		return nil, WrapEnsureSchemaError(err)
+	}
+	if err := app.Query(`CREATE TABLE IF NOT EXISTS processed_events (
+		event_id TEXT PRIMARY KEY, event_type TEXT, source_service TEXT,
+		aggregate_type TEXT, aggregate_id TEXT, aggregate_version BIGINT,
+		processed_at TIMESTAMP
+	)`).Exec(); err != nil {
+		app.Close()
+		return nil, WrapEnsureSchemaError(err)
+	}
+	if err := app.Query(`ALTER TABLE files WITH cdc = {'enabled': true, 'preimage': 'full', 'postimage': true}`).Exec(); err != nil {
 		app.Close()
 		return nil, WrapEnsureSchemaError(err)
 	}

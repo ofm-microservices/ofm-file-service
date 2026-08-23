@@ -174,6 +174,12 @@ func (m *fileMapper) ToError(err error) error {
 		errors.Is(err, domain.ErrFailedToFindFile),
 		errors.Is(err, domain.ErrFailedToDeleteFile),
 		errors.Is(err, domain.ErrFailedToDeleteStoredFile):
+		m.log.Error("file storage request failed",
+			logging.Operation("grpc.file.storage"),
+			logging.Attempt(1),
+			logging.Retryable(false),
+			logging.Err(err),
+		)
 		return status.Error(codes.Internal, err.Error())
 	default:
 		m.log.Error("file request failed",
