@@ -14,5 +14,5 @@ var LoggerModule = fx.Options(
 
 // ProvideLogger constructs the shared structured logger.
 func ProvideLogger(cfg *config.Config) (logging.Logger, error) {
-	return logging.New("file-service", cfg.App.Env, cfg.App.LogLevel)
+	return logging.NewWithMode("file-service", cfg.App.Env, cfg.App.ObservabilityMode, cfg.App.LogLevel)
 }
