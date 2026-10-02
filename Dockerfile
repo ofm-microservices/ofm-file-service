@@ -1,4 +1,4 @@
-FROM golang:1.25.5 AS builder
+FROM golang:1.25.11 AS builder
 
 WORKDIR /src
 
@@ -9,7 +9,7 @@ WORKDIR /src/ofm-file-service
 
 RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/file-service ./cmd/file-service
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -o /out/file-service ./cmd/file-service
 
 FROM debian:bookworm-slim
 
@@ -23,6 +23,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/file-service /app/file-service
+COPY --from=builder /src/ofm-file-service/migration /app/migration
 
 RUN chown -R app:app /app
 
