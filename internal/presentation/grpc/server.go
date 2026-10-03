@@ -7,6 +7,7 @@ import (
 
 	"file-service/config"
 	"github.com/ofm-microservices/ofm-common/pkg/logging"
+	transportgrpc "github.com/ofm-microservices/ofm-common/pkg/observability/grpc"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
 	filev1 "github.com/ofm-microservices/ofm-common/proto/file/v1"
 	otelgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -35,7 +36,7 @@ func NewServer(svc FileService, cfg config.GRPCConfig, log logging.Logger) (Serv
 
 	grpcSrv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.UnaryInterceptor(metrics.UnaryServerInterceptor()),
+		grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), transportgrpc.UnaryServerInterceptor(log)),
 	)
 	s := &server{
 		svc:  svc,
@@ -79,7 +80,7 @@ func (s *server) UploadFile(ctx context.Context, req *filev1.UploadFileRequest) 
 	log := logging.WithContext(ctx, s.log)
 	file, err := s.svc.CreateFile(ctx, s.mapr.ToUploadParams(req))
 	if err != nil {
-		log.Error("upload file failed",
+		log.Warn("upload file returned a business/storage condition",
 			logging.Operation("grpc.file.upload"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -101,7 +102,7 @@ func (s *server) UploadFiles(ctx context.Context, req *filev1.UploadFilesRequest
 	log := logging.WithContext(ctx, s.log)
 	files, err := s.svc.CreateFiles(ctx, s.mapr.ToUploadFilesParams(req))
 	if err != nil {
-		log.Error("upload files failed",
+		log.Warn("upload files returned a business/storage condition",
 			logging.Operation("grpc.file.upload_many"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -120,7 +121,7 @@ func (s *server) CreateDirectUpload(ctx context.Context, req *filev1.CreateDirec
 	log := logging.WithContext(ctx, s.log)
 	file, uploadURL, err := s.svc.CreateDirectUpload(ctx, s.mapr.ToCreateDirectUploadParams(req))
 	if err != nil {
-		log.Error("create direct upload failed",
+		log.Warn("create direct upload returned a business/storage condition",
 			logging.Operation("grpc.file.create_direct_upload"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -140,7 +141,7 @@ func (s *server) CompleteDirectUpload(ctx context.Context, req *filev1.CompleteD
 	log := logging.WithContext(ctx, s.log)
 	file, url, err := s.svc.CompleteDirectUpload(ctx, req.GetFileId())
 	if err != nil {
-		log.Error("complete direct upload failed",
+		log.Warn("complete direct upload returned a business/storage condition",
 			logging.Operation("grpc.file.complete_direct_upload"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -159,7 +160,7 @@ func (s *server) GetFile(ctx context.Context, req *filev1.GetFileRequest) (*file
 	log := logging.WithContext(ctx, s.log)
 	file, err := s.svc.GetFile(ctx, req.GetFileId())
 	if err != nil {
-		log.Error("get file failed",
+		log.Warn("get file returned a business/storage condition",
 			logging.Operation("grpc.file.get"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -179,7 +180,7 @@ func (s *server) GetFileURL(ctx context.Context, req *filev1.GetFileURLRequest) 
 	log := logging.WithContext(ctx, s.log)
 	url, err := s.svc.GetFileURL(ctx, req.GetFileId())
 	if err != nil {
-		log.Error("get file url failed",
+		log.Warn("get file url returned a business/storage condition",
 			logging.Operation("grpc.file.get_url"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -199,7 +200,7 @@ func (s *server) GetFileURLs(ctx context.Context, req *filev1.GetFileURLsRequest
 	log := logging.WithContext(ctx, s.log)
 	urls, err := s.svc.GetFileURLs(ctx, req.GetFileIds())
 	if err != nil {
-		log.Error("get file urls failed",
+		log.Warn("get file urls returned a business/storage condition",
 			logging.Operation("grpc.file.get_urls"),
 			logging.Attempt(1),
 			logging.Retryable(false),
@@ -218,7 +219,7 @@ func (s *server) DeleteFile(ctx context.Context, req *filev1.DeleteFileRequest) 
 	started := time.Now()
 	log := logging.WithContext(ctx, s.log)
 	if err := s.svc.DeleteFile(ctx, req.GetFileId()); err != nil {
-		log.Error("delete file failed",
+		log.Warn("delete file returned a business/storage condition",
 			logging.Operation("grpc.file.delete"),
 			logging.Attempt(1),
 			logging.Retryable(false),

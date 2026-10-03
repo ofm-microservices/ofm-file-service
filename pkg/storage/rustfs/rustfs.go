@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/ofm-microservices/ofm-common/pkg/observability/metrics"
+	"github.com/ofm-microservices/ofm-common/pkg/resilience"
 )
 
 type client struct {
@@ -21,6 +23,7 @@ type client struct {
 	s3        s3API
 	presigner s3PresignAPI
 	endpoint  string
+	breaker   *resilience.Breaker
 }
 
 var loadDefaultConfig = awsconfig.LoadDefaultConfig
@@ -57,6 +60,7 @@ func Open(ctx context.Context, cfg Options) (Storage, error) {
 		s3:        newS3Client(awsCfg, s3Options),
 		presigner: newS3Presigner(awsCfg, s3Options),
 		endpoint:  cfg.Endpoint,
+		breaker:   resilience.NewBreaker(resilience.BreakerConfigFromEnv()),
 	}
 	var lastErr error
 	for i := 0; i < 10; i++ {
@@ -77,15 +81,14 @@ func Open(ctx context.Context, cfg Options) (Storage, error) {
 }
 
 func (c *client) Put(ctx context.Context, objectKey, contentType string, data []byte) (int64, error) {
+	c.ensureBreaker()
 	started := time.Now()
 	status := "success"
 	defer func() { metrics.Global().ObserveObjectStorage("put", c.bucket, status, time.Since(started)) }()
 
-	_, err := c.s3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(c.bucket),
-		Key:         aws.String(objectKey),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
+	err := c.breaker.Do(ctx, func(callCtx context.Context) error {
+		_, err := c.s3.PutObject(callCtx, &s3.PutObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(objectKey), Body: bytes.NewReader(data), ContentType: aws.String(contentType)})
+		return err
 	})
 	if err != nil {
 		status = "error"
@@ -96,10 +99,12 @@ func (c *client) Put(ctx context.Context, objectKey, contentType string, data []
 }
 
 func (c *client) PresignPut(ctx context.Context, objectKey, contentType string) (string, error) {
-	req, err := c.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(c.bucket),
-		Key:         aws.String(objectKey),
-		ContentType: aws.String(contentType),
+	c.ensureBreaker()
+	var req *v4.PresignedHTTPRequest
+	err := c.breaker.Do(ctx, func(callCtx context.Context) error {
+		var err error
+		req, err = c.presigner.PresignPutObject(callCtx, &s3.PutObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(objectKey), ContentType: aws.String(contentType)})
+		return err
 	})
 	if err != nil {
 		return "", WrapPresignPutObjectError(objectKey, err)
@@ -112,9 +117,10 @@ func (c *client) PublicURL(objectKey string) string {
 }
 
 func (c *client) Exists(ctx context.Context, objectKey string) (bool, error) {
-	_, err := c.s3.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(c.bucket),
-		Key:    aws.String(objectKey),
+	c.ensureBreaker()
+	err := c.breaker.Do(ctx, func(callCtx context.Context) error {
+		_, err := c.s3.HeadObject(callCtx, &s3.HeadObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(objectKey)})
+		return err
 	})
 	if err == nil {
 		return true, nil
@@ -127,13 +133,14 @@ func (c *client) Exists(ctx context.Context, objectKey string) (bool, error) {
 }
 
 func (c *client) Delete(ctx context.Context, objectKey string) error {
+	c.ensureBreaker()
 	started := time.Now()
 	status := "success"
 	defer func() { metrics.Global().ObserveObjectStorage("delete", c.bucket, status, time.Since(started)) }()
 
-	if _, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(c.bucket),
-		Key:    aws.String(objectKey),
+	if err := c.breaker.Do(ctx, func(callCtx context.Context) error {
+		_, err := c.s3.DeleteObject(callCtx, &s3.DeleteObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(objectKey)})
+		return err
 	}); err != nil {
 		status = "error"
 		return WrapDeleteObjectError(objectKey, err)
@@ -144,4 +151,10 @@ func (c *client) Delete(ctx context.Context, objectKey string) error {
 
 func (c *client) String() string {
 	return fmt.Sprintf("rustfs(%s)", c.bucket)
+}
+
+func (c *client) ensureBreaker() {
+	if c.breaker == nil {
+		c.breaker = resilience.NewBreaker(resilience.BreakerConfigFromEnv())
+	}
 }

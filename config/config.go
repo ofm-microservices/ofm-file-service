@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 )
@@ -11,8 +13,9 @@ type Config struct {
 	GRPC    GRPCConfig
 	Metrics MetricsConfig
 	Tracing TracingConfig
-	Scylla  ScyllaConfig
+	DB      DBConfig `envPrefix:"DB_"`
 	RustFS  RustFSConfig
+	Kafka   KafkaConfig
 }
 
 // Load reads environment variables into Config and applies defaults declared
@@ -23,6 +26,9 @@ func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := env.Parse(cfg); err != nil {
 		return nil, WrapParseEnvConfigError(err)
+	}
+	if host := os.Getenv("DB_HOST"); host != "" {
+		cfg.DB.Host = host
 	}
 
 	return cfg, nil
